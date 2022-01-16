@@ -65,17 +65,14 @@ go:	mov	ax,cs
 ! Note that 'es' is already set up.
 
 load_setup:
-	mov	dx,#0x0000		! 驱动器和磁头
-	mov	cx,#0x0002		! 2扇区, 0磁道
-	mov	bx,#0x0200		! es:bx是读入的内存地址, 这里要偏移512字节(因为有bootsect)
-    ! ah = 0x02代表读磁盘扇区
-    ! al此时作为要读取的扇区数
-	mov	ax, #0x0200 + SETUPLEN
-	int	0x13			! 读取
-
-	jnc	ok_load_setup	! 读取成功, 跳转到ok_load_setup
+	mov	dx,#0x0000		! drive 0, head 0
+	mov	cx,#0x0002		! sector 2, track 0
+	mov	bx,#0x0200		! address = 512, in INITSEG
+	mov	ax,#0x0200+SETUPLEN	! service 2, nr of sectors
+	int	0x13			! read it
+	jnc	ok_load_setup		! ok - continue
 	mov	dx,#0x0000
-	mov	ax,#0x0000		! 失败, 重置
+	mov	ax,#0x0000		! reset the diskette
 	int	0x13
 	j	load_setup
 
@@ -92,28 +89,17 @@ ok_load_setup:
 	mov	ax,#INITSEG
 	mov	es,ax
 
-! 实验1.1 要想完成此实验, 先搜索一下0x10号中断
-! 看完之后, 你一定可以自己完成字符串的修改
-! 打印一些信息
+! Print some inane message
 
-	mov	ah, #0x03        ! ah = 0x03, 读取光标的位置
-	xor	bh, bh           ! ???, 也许这样严谨一些
-	int	0x10             ! 调用中断, 去读取光标位置
-    
-    ! 打印信息
-	mov	cx, #28          ! cx是字符串长度, 为什么是28? 哈哈, 你还没看msg1的注释
-	mov	bx, #0x000c		 ! bh是页码, bl是颜色
-	mov	bp, #msg1        ! bp指向字符串msg1 (es:bp是字符串的地址, es前面已经处理好了)
-
-    ! 显示模式(al):  
-    ! 0x00:字符串只包含字符码，显示之后不更新光标位置，属性值在BL中  
-    ! 0x01:字符串只包含字符码，显示之后更新光标位置，属性值在BL中  
-    ! 0x02:字符串包含字符码及属性值，显示之后不更新光标位置  
-    ! 0x03:字符串包含字符码及属性值，显示之后更新光标位置  
-    ! ah = 0x13是显示字符串功能
-	mov	ax, #0x1301		 ! 打印字符串, 并更新光标位置
-	int	0x10             ! 调用0x10号中断, 打印成功啦
-
+	mov	ah,#0x03		! read cursor pos
+	xor	bh,bh
+	int	0x10
+	
+	mov	cx,#24
+	mov	bx,#0x0007		! page 0, attribute 7 (normal)
+	mov	bp,#msg1
+	mov	ax,#0x1301		! write string, move cursor
+	int	0x10
 
 ! ok, we've written the message, now
 ! we want to load the system (at 0x10000)
@@ -257,12 +243,9 @@ sectors:
 
 msg1:
 	.byte 13,10
-	.ascii "WELCOME TO ZJY'S OS!!!"
+	.ascii "Loading system ..."
 	.byte 13,10,13,10
 
-
-! 共512字节, 其中最后两个字节必须是0xAA55(引导扇区标记)
-! 所以这里跳到508去写root_dev和boot_flag
 .org 508
 root_dev:
 	.word ROOT_DEV
