@@ -58,7 +58,7 @@ sa_mask = 4
 sa_flags = 8
 sa_restorer = 12
 
-nr_system_calls = 72
+nr_system_calls = 72 + 2
 
 /*
  * Ok, I get parallel printer interrupts while using the floppy for some
@@ -78,7 +78,9 @@ reschedule:
 	jmp schedule
 .align 2
 system_call:
-	cmpl $nr_system_calls-1,%eax
+
+    # 检查系统调用是否在合法范围内
+	cmpl $nr_system_calls-1, %eax
 	ja bad_sys_call
 	push %ds
 	push %es
@@ -91,7 +93,11 @@ system_call:
 	mov %dx,%es
 	movl $0x17,%edx		# fs points to local data space
 	mov %dx,%fs
+
+    # 重要
+    # 此处寻址为 sys_call_table + (4 * eax), 其中的4是一个函数指针的大小, eax是系统调用的编号
 	call sys_call_table(,%eax,4)
+
 	pushl %eax
 	movl current,%eax
 	cmpl $0,state(%eax)		# state

@@ -129,6 +129,8 @@
 #define __NR_ssetmask	69
 #define __NR_setreuid	70
 #define __NR_setregid	71
+#define __NR_iam 72             // 添加系统调用号
+#define __NR_whoami 73
 
 #define _syscall0(type,name) \
 type name(void) \
@@ -143,7 +145,7 @@ errno = -__res; \
 return -1; \
 }
 
-#define _syscall1(type,name,atype,a) \
+#define _syscall1(type, name, atype, a) \
 type name(atype a) \
 { \
 long __res; \
@@ -156,7 +158,7 @@ errno = -__res; \
 return -1; \
 }
 
-#define _syscall2(type,name,atype,a,btype,b) \
+#define _syscall2(type, name, atype, a, btype, b) \
 type name(atype a,btype b) \
 { \
 long __res; \
