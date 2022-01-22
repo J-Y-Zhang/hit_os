@@ -134,6 +134,13 @@ void main(void)		/* This really IS void, no error here. */
 	hd_init();
 	floppy_init();
 	sti();
+
+    setup((void *) &drive_info);
+	(void) open("/dev/tty0",O_RDWR,0);
+	(void) dup(0);
+	(void) dup(0);
+    (void) open("/var/log", O_CREAT|O_TRUNC|O_WRONLY, 0666);
+
 	move_to_user_mode();
 	if (!fork()) {		/* we count on this going ok */
 		init();
@@ -169,10 +176,6 @@ void init(void)
 {
 	int pid,i;
 
-	setup((void *) &drive_info);
-	(void) open("/dev/tty0",O_RDWR,0);
-	(void) dup(0);
-	(void) dup(0);
 	printf("%d buffers = %d bytes buffer space\n\r",NR_BUFFERS,
 		NR_BUFFERS*BLOCK_SIZE);
 	printf("Free mem: %d bytes\n\r",memory_end-main_memory_start);

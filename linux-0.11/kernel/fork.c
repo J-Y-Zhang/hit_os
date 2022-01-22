@@ -90,6 +90,10 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	p->utime = p->stime = 0;
 	p->cutime = p->cstime = 0;
 	p->start_time = jiffies;
+
+    /*新建进程*/
+    fprintk(3, "%d\tN\t%d\n", p->pid, p->start_time);
+
 	p->tss.back_link = 0;
 	p->tss.esp0 = PAGE_SIZE + (long) p;
 	p->tss.ss0 = 0x10;
@@ -130,6 +134,8 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	set_tss_desc(gdt+(nr<<1)+FIRST_TSS_ENTRY,&(p->tss));
 	set_ldt_desc(gdt+(nr<<1)+FIRST_LDT_ENTRY,&(p->ldt));
 	p->state = TASK_RUNNING;	/* do this last, just in case */
+    /*新建 => 就绪*/
+	fprintk(3, "%d\tJ\t%d\n", p->pid, jiffies);
 	return last_pid;
 }
 

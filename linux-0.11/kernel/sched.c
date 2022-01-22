@@ -107,6 +107,7 @@ void schedule(void)
 	struct task_struct ** p;
 
 /* check alarm, wake up any interruptible tasks that have got a signal */
+    /*该醒的都醒一醒，我要调度了（可中断睡眠 => 就绪）*/
 
 	for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
 		if (*p) {
@@ -114,13 +115,16 @@ void schedule(void)
 					(*p)->signal |= (1<<(SIGALRM-1));
 					(*p)->alarm = 0;
 				}
-			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) &&
-			(*p)->state==TASK_INTERRUPTIBLE)
-				(*p)->state=TASK_RUNNING;
+			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) && (*p)->state == TASK_INTERRUPTIBLE) {
+                (*p)->state=TASK_RUNNING;
+                /*可中断睡眠 => 就绪*/
+                fprintk(3, "%d\tJ\t%d\n", (*p)->pid, jiffies);
+            }
 		}
 
 /* this is the scheduler proper: */
 
+    // 寻找next
 	while (1) {
 		c = -1;
 		next = 0;
@@ -138,12 +142,23 @@ void schedule(void)
 				(*p)->counter = ((*p)->counter >> 1) +
 						(*p)->priority;
 	}
+
+
+	// Run Next
+	if(current->pid != task[next] ->pid) {
+		fprintk(3,"%d\tJ\t%d\n", current->pid, jiffies);
+        if (task[next]->pid != TASK_RUNNING)
+		    fprintk(3,"%d\tR\t%d\n",task[next]->pid,jiffies);
+	}
+
 	switch_to(next);
 }
 
 int sys_pause(void)
 {
 	current->state = TASK_INTERRUPTIBLE;
+	if(current->pid != 0)
+		fprintk(3,"%d\tW\t%d\n", current->pid, jiffies);
 	schedule();
 	return 0;
 }
@@ -156,12 +171,25 @@ void sleep_on(struct task_struct **p)
 		return;
 	if (current == &(init_task.task))
 		panic("task[0] trying to sleep");
+
+    /*tmp是原来的头部*/
 	tmp = *p;
+
+    /*将当前任务插入等待队列头部*/
 	*p = current;
 	current->state = TASK_UNINTERRUPTIBLE;
+	fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
+
+    /*让出CPU时间片*/
 	schedule();
-	if (tmp)
-		tmp->state=0;
+
+    /*如果接着往下执行了就说明wake_up执行了（强制唤醒）*/
+
+	if (tmp) {   
+        /*唤醒原队头进程*/
+		tmp->state = TASK_RUNNING;
+		fprintk(3, "%d\tJ\t%d\n", tmp->pid, jiffies);
+	}
 }
 
 void interruptible_sleep_on(struct task_struct **p)
@@ -172,24 +200,37 @@ void interruptible_sleep_on(struct task_struct **p)
 		return;
 	if (current == &(init_task.task))
 		panic("task[0] trying to sleep");
-	tmp=*p;
-	*p=current;
-repeat:	current->state = TASK_INTERRUPTIBLE;
+	tmp = *p;
+	*p = current;
+repeat:	
+    current->state = TASK_INTERRUPTIBLE;
+	fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
+
 	schedule();
+
+    /*如果唤醒的（cur）不是队头，那么必须让cur睡眠，并唤醒队头*/
 	if (*p && *p != current) {
-		(**p).state=0;
+        /*唤醒队头*/
+		(**p).state = TASK_RUNNING;
+		fprintk(3, "%d\tJ\t%d\n", (*p)->pid, jiffies);
+
+        /*看看repeat那边是什么？？*/
+        /*正好是睡眠cur！！*/
 		goto repeat;
 	}
-	*p=NULL;
-	if (tmp)
-		tmp->state=0;
+	*p = NULL;
+	if (tmp) {
+		tmp->state = 0;
+		fprintk(3,"%d\tJ\t%d\n",tmp->pid,jiffies);
+	}
 }
 
 void wake_up(struct task_struct **p)
 {
 	if (p && *p) {
-		(**p).state=0;
-		*p=NULL;
+		(**p).state = 0;
+		fprintk(3,"%d\tJ\t%d\n", (*p)->pid, jiffies);
+		*p = NULL;
 	}
 }
 
