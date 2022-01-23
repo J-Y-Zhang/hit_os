@@ -49,6 +49,7 @@ extern void mem_use(void);
 
 extern int timer_interrupt(void);
 extern int system_call(void);
+extern int switch_to(struct task_struct *pnext, unsigned long ldt);
 
 union task_union {
 	struct task_struct task;
@@ -61,8 +62,8 @@ long volatile jiffies=0;
 long startup_time=0;
 struct task_struct *current = &(init_task.task);
 struct task_struct *last_task_used_math = NULL;
-
-struct task_struct * task[NR_TASKS] = {&(init_task.task), };
+struct tss_struct *tss = &(init_task.task.tss); 
+struct task_struct *task[NR_TASKS] = {&(init_task.task), };
 
 long user_stack [ PAGE_SIZE>>2 ] ;
 
@@ -105,9 +106,11 @@ void schedule(void)
 {
 	int i,next,c;
 	struct task_struct ** p;
+    
+    // pnext是指向下一个进程的PCB的指针
+    struct task_struct * pnext = NULL;
 
 /* check alarm, wake up any interruptible tasks that have got a signal */
-    /*该醒的都醒一醒，我要调度了（可中断睡眠 => 就绪）*/
 
 	for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
 		if (*p) {
@@ -115,11 +118,9 @@ void schedule(void)
 					(*p)->signal |= (1<<(SIGALRM-1));
 					(*p)->alarm = 0;
 				}
-			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) && (*p)->state == TASK_INTERRUPTIBLE) {
-                (*p)->state=TASK_RUNNING;
-                /*可中断睡眠 => 就绪*/
-                fprintk(3, "%d\tJ\t%d\n", (*p)->pid, jiffies);
-            }
+			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) &&
+			(*p)->state==TASK_INTERRUPTIBLE)
+				(*p)->state=TASK_RUNNING;
 		}
 
 /* this is the scheduler proper: */
@@ -128,37 +129,44 @@ void schedule(void)
 	while (1) {
 		c = -1;
 		next = 0;
+
+        // 这一句必须加，我本来没有加，结果系统直接宕机，暴风哭泣
+        // 原因如下：
+        // 当X进程退出的时候，会触发schedule，此时X已经退出了
+        // 如果不加这一句，那pnext的初值依然是X，switch_to一个已经退出的进程，自然会宕机
+        // 别的都不多说了，下午倒桩移库的时候，脑子里都是pnext
+        pnext = task[0];
+
 		i = NR_TASKS;
 		p = &task[NR_TASKS];
+
 		while (--i) {
 			if (!*--p)
 				continue;
+
+            // 当没有任务的时候，0号进程会疯狂的sys_pause，来激活schedule()
+            // 因此，永远进不去这个if
+            // 所以我们要对pnext正确的赋初值(0号进程)
 			if ((*p)->state == TASK_RUNNING && (*p)->counter > c)
-				c = (*p)->counter, next = i;
+				c = (*p)->counter, next = i, pnext = (*p);
 		}
+
 		if (c) break;
-		for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
-			if (*p)
-				(*p)->counter = ((*p)->counter >> 1) +
-						(*p)->priority;
+
+		for (p = &LAST_TASK; p > &FIRST_TASK; --p) {
+			if (*p) {
+				(*p)->counter = ((*p)->counter >> 1) + (*p)->priority;
+            }
+        }
 	}
 
-
-	// Run Next
-	if(current->pid != task[next] ->pid) {
-		fprintk(3,"%d\tJ\t%d\n", current->pid, jiffies);
-        if (task[next]->pid != TASK_RUNNING)
-		    fprintk(3,"%d\tR\t%d\n",task[next]->pid,jiffies);
-	}
-
-	switch_to(next);
+    // 切换到next进程，需要的信息有PCB和LDT（TSS就免了）
+	switch_to(pnext, _LDT(next));
 }
 
 int sys_pause(void)
 {
 	current->state = TASK_INTERRUPTIBLE;
-	if(current->pid != 0)
-		fprintk(3,"%d\tW\t%d\n", current->pid, jiffies);
 	schedule();
 	return 0;
 }
@@ -171,25 +179,12 @@ void sleep_on(struct task_struct **p)
 		return;
 	if (current == &(init_task.task))
 		panic("task[0] trying to sleep");
-
-    /*tmp是原来的头部*/
 	tmp = *p;
-
-    /*将当前任务插入等待队列头部*/
 	*p = current;
 	current->state = TASK_UNINTERRUPTIBLE;
-	fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
-
-    /*让出CPU时间片*/
 	schedule();
-
-    /*如果接着往下执行了就说明wake_up执行了（强制唤醒）*/
-
-	if (tmp) {   
-        /*唤醒原队头进程*/
-		tmp->state = TASK_RUNNING;
-		fprintk(3, "%d\tJ\t%d\n", tmp->pid, jiffies);
-	}
+	if (tmp)
+		tmp->state=0;
 }
 
 void interruptible_sleep_on(struct task_struct **p)
@@ -200,37 +195,24 @@ void interruptible_sleep_on(struct task_struct **p)
 		return;
 	if (current == &(init_task.task))
 		panic("task[0] trying to sleep");
-	tmp = *p;
-	*p = current;
-repeat:	
-    current->state = TASK_INTERRUPTIBLE;
-	fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
-
+	tmp=*p;
+	*p=current;
+repeat:	current->state = TASK_INTERRUPTIBLE;
 	schedule();
-
-    /*如果唤醒的（cur）不是队头，那么必须让cur睡眠，并唤醒队头*/
 	if (*p && *p != current) {
-        /*唤醒队头*/
-		(**p).state = TASK_RUNNING;
-		fprintk(3, "%d\tJ\t%d\n", (*p)->pid, jiffies);
-
-        /*看看repeat那边是什么？？*/
-        /*正好是睡眠cur！！*/
+		(**p).state=0;
 		goto repeat;
 	}
-	*p = NULL;
-	if (tmp) {
-		tmp->state = 0;
-		fprintk(3,"%d\tJ\t%d\n",tmp->pid,jiffies);
-	}
+	*p=NULL;
+	if (tmp)
+		tmp->state=0;
 }
 
 void wake_up(struct task_struct **p)
 {
 	if (p && *p) {
-		(**p).state = 0;
-		fprintk(3,"%d\tJ\t%d\n", (*p)->pid, jiffies);
-		*p = NULL;
+		(**p).state=0;
+		*p=NULL;
 	}
 }
 

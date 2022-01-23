@@ -34,15 +34,15 @@
 00000000000i[     ]   SB16 support: no
 00000000000i[     ]   USB support: no
 00000000000i[     ]   VGA extension support: vbe 
-00000000000i[MEM0 ] allocated memory at 0xf5fec010. after alignment, vector=0xf5fed000
+00000000000i[MEM0 ] allocated memory at 0xf6074010. after alignment, vector=0xf6075000
 00000000000i[MEM0 ] 16.00MB
-00000000000i[MEM0 ] rom at 0xfffe0000/131072 ('./bochs/BIOS-bochs-latest')
-00000000000i[MEM0 ] rom at 0xc0000/39424 ('./bochs/vgabios.bin')
+00000000000i[MEM0 ] rom at 0xfffe0000/131072 ('../bochs/BIOS-bochs-latest')
+00000000000i[MEM0 ] rom at 0xc0000/39424 ('../bochs/vgabios.bin')
 00000000000i[CMOS ] Using local time for initial clock
-00000000000i[CMOS ] Setting initial clock to: Fri Jan 21 18:25:56 2022 (time0=1642818356)
+00000000000i[CMOS ] Setting initial clock to: Sun Jan 23 07:08:50 2022 (time0=1642950530)
 00000000000i[DMA  ] channel 4 used by cascade
 00000000000i[DMA  ] channel 2 used by Floppy Drive
-00000000000i[FDD  ] fd0: './linux-0.11/Image' ro=0, h=2,t=80,spt=18
+00000000000i[FDD  ] fd0: '../linux-0.11/Image' ro=0, h=2,t=80,spt=18
 00000000000i[MEM0 ] Register memory access handlers: 0x000a0000 - 0x000bffff
 00000000000i[XGUI ] test_alloc_colors: 16 colors available out of 16 colors tried
 00000000000i[XGUI ] font 8 wide x 16 high, display depth = 24
@@ -56,7 +56,7 @@
 00000000000i[     ] init_mem of 'extfpuirq' plugin device by virtual method
 00000000000i[     ] init_mem of 'speaker' plugin device by virtual method
 00000000000i[     ] init_dev of 'harddrv' plugin device by virtual method
-00000000000i[HD   ] HD on ata0-0: './hdc-0.11.img' 'flat' mode 
+00000000000i[HD   ] HD on ata0-0: '../hdc-0.11.img' 'flat' mode 
 00000000000i[HD   ] translation on ata0-0 set to 'none'
 00000000000i[HD   ] Using boot sequence floppy, none, none
 00000000000i[HD   ] Floppy boot signature check is enabled
@@ -98,7 +98,9 @@
 00001200000i[XGUI ] charmap update. Font Height is 16
 00004769035i[BIOS ] IDE time out
 00004967898i[BIOS ] Booting from 0000:7c00
-00016289556i[FDD  ] partial read() on floppy image returns 289/512
+00016198401i[FDD  ] partial read() on floppy image returns 161/512
+00016243356i[FDD  ] read() on floppy image returns 0
+00016289556i[FDD  ] read() on floppy image returns 0
 00016334511i[FDD  ] read() on floppy image returns 0
 00016379466i[FDD  ] read() on floppy image returns 0
 00016424421i[FDD  ] read() on floppy image returns 0
@@ -236,29 +238,26 @@
 00022368451i[FDD  ] read() on floppy image returns 0
 00022413406i[FDD  ] read() on floppy image returns 0
 00022463876i[BIOS ] int13_harddisk: function 15, unmapped device for ELDL=81
-01371846482i[XGUI ] X11 Beep ON (frequency=inf)
-01372322056i[XGUI ] X11 Beep OFF
-01372322056i[PIT81] Changing GATE 2 to: 0
-01518536000i[     ] cpu loop quit, shutting down simulator
-01518536000i[CPU  ] CPU is in protected mode (active)
-01518536000i[CPU  ] CS.d_b = 32 bit
-01518536000i[CPU  ] SS.d_b = 32 bit
-01518536000i[CPU  ] | EAX=0001b5c0  EBX=0001c624  ECX=00000241  EDX=0001b5c0
-01518536000i[CPU  ] | ESP=0001c564  EBP=000226ec  ESI=00000002  EDI=00000001
-01518536000i[CPU  ] | IOPL=0 id vip vif ac vm rf nt of df IF tf sf zf af PF cf
-01518536000i[CPU  ] | SEG selector     base    limit G D
-01518536000i[CPU  ] | SEG sltr(index|ti|rpl)     base    limit G D
-01518536000i[CPU  ] |  CS:0008( 0001| 0|  0) 00000000 00000fff 1 1
-01518536000i[CPU  ] |  DS:0010( 0002| 0|  0) 00000000 00000fff 1 1
-01518536000i[CPU  ] |  SS:0010( 0002| 0|  0) 00000000 00000fff 1 1
-01518536000i[CPU  ] |  ES:0010( 0002| 0|  0) 00000000 00000fff 1 1
-01518536000i[CPU  ] |  FS:0017( 0002| 1|  3) 00000000 0000009f 1 1
-01518536000i[CPU  ] |  GS:0017( 0002| 1|  3) 00000000 0000009f 1 1
-01518536000i[CPU  ] | EIP=00006afc (00006afc)
-01518536000i[CPU  ] | CR0=0x8000001b CR1=0 CR2=0x0805dc0c
-01518536000i[CPU  ] | CR3=0x00000000 CR4=0x00000000
-01518536000i[CPU  ] >> cmp ebx, 0x0001c5e0 : 81FBE0C50100
-01518536000i[CMOS ] Last time is 1642818735 (Fri Jan 21 18:32:15 2022)
-01518536000i[XGUI ] Exit
-01518536000i[     ] restoring default signal behavior
-01518536000i[CTRL ] quit_sim called with exit code 1
+00202108000i[     ] cpu loop quit, shutting down simulator
+00202108000i[CPU  ] CPU is in protected mode (active)
+00202108000i[CPU  ] CS.d_b = 32 bit
+00202108000i[CPU  ] SS.d_b = 32 bit
+00202108000i[CPU  ] | EAX=ffffffff  EBX=0001c218  ECX=0000002d  EDX=00fff000
+00202108000i[CPU  ] | ESP=0001c100  EBP=00021e6c  ESI=0001b140  EDI=00000000
+00202108000i[CPU  ] | IOPL=0 id vip vif ac vm rf nt of df IF tf sf zf af PF cf
+00202108000i[CPU  ] | SEG selector     base    limit G D
+00202108000i[CPU  ] | SEG sltr(index|ti|rpl)     base    limit G D
+00202108000i[CPU  ] |  CS:0008( 0001| 0|  0) 00000000 00000fff 1 1
+00202108000i[CPU  ] |  DS:0010( 0002| 0|  0) 00000000 00000fff 1 1
+00202108000i[CPU  ] |  SS:0010( 0002| 0|  0) 00000000 00000fff 1 1
+00202108000i[CPU  ] |  ES:0010( 0002| 0|  0) 00000000 00000fff 1 1
+00202108000i[CPU  ] |  FS:0017( 0002| 1|  3) 00000000 0000009f 1 1
+00202108000i[CPU  ] |  GS:0017( 0002| 1|  3) 10000000 00003fff 1 1
+00202108000i[CPU  ] | EIP=00006ae3 (00006ae3)
+00202108000i[CPU  ] | CR0=0x80000013 CR1=0 CR2=0x0805d40c
+00202108000i[CPU  ] | CR3=0x00000000 CR4=0x00000000
+00202108000i[CPU  ] >> sub ebx, 0x00000004 : 83EB04
+00202108000i[CMOS ] Last time is 1642950580 (Sun Jan 23 07:09:40 2022)
+00202108000i[XGUI ] Exit
+00202108000i[     ] restoring default signal behavior
+00202108000i[CTRL ] quit_sim called with exit code 1

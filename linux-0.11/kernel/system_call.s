@@ -45,11 +45,13 @@ EFLAGS		= 0x24
 OLDESP		= 0x28
 OLDSS		= 0x2C
 
+ESP0 = 4
+KERNEL_STACK = 12
 state	= 0		# these are offsets into the task-struct.
 counter	= 4
 priority = 8
-signal	= 12
-sigaction = 16		# MUST be 16 (=len of sigaction)
+signal	= 16
+sigaction = 20		# MUST be 16 (=len of sigaction)
 blocked = (33*16)
 
 # offsets within sigaction
@@ -67,6 +69,7 @@ nr_system_calls = 72
 .globl system_call,sys_fork,timer_interrupt,sys_execve
 .globl hd_interrupt,floppy_interrupt,parallel_interrupt
 .globl device_not_available, coprocessor_error
+.globl switch_to, first_return_from_kernel
 
 .align 2
 bad_sys_call:
@@ -283,3 +286,77 @@ parallel_interrupt:
 	outb %al,$0x20
 	popl %eax
 	iret
+
+.align 2
+switch_to:
+    # 处理函数栈帧基地址
+    pushl %ebp              # 压栈调用switch_to的函数的栈帧
+    movl %esp, %ebp         # 将ebp设为当前函数的栈帧基地址
+
+    # 保存三个寄存器
+    pushl %ecx             
+    pushl %ebx
+    pushl %eax
+    
+    movl 8(%ebp), %ebx       # 取出next的PCB（8应该是一个函数指针偏移量，吧？）
+    cmpl %ebx, current       # 和当前进程的PCB一样吗？一样就啥也不干
+    je 1f                    
+                             
+    # 切换PCB                 
+    # 经过这两条指令以后，eax 指向现在的当前进程，ebx 指向下一个进程
+    # 全局变量 current 也指向下一个进程（李老师原话）
+    movl %ebx, %eax          
+    xchgl %eax, current
+
+
+    # TSS中的内核栈指针的重写
+
+    # struct tss_struct *tss = &(init_task.task.tss); 
+    # 也是定义了一个全局变量，和 current 类似，用来指向那一段 0 号进程的 TSS 内存
+    # 也就是说，所有进程共享0号进程的tss，不再进行切换
+    movl tss, %ecx
+
+    addl $4096, %ebx         # 栈是向下生长的，内核栈栈底位于该PCB所在页（4KB）的高地址
+    movl %ebx, ESP0(%ecx)    # ESP0 = 4，因为内核栈指针esp0就放在tss中偏移为4的位置 
+    
+
+    # 切换内核栈
+
+    # 存储原进程的esp到原进程的PCB中
+    movl %esp, KERNEL_STACK(%eax)
+    # 从下一个 PCB 中的对应位置上取出保存的内核栈栈顶放入 esp 寄存器
+    movl 8(%ebp), %ebx
+    movl KERNEL_STACK(%ebx), %esp
+
+
+    # 切换LDT
+    movl 12(%ebp), %ecx
+    lldt %cx
+
+    # 刷新一下fs（用户态内存的地址空间）
+    # 在切换LDT之后执行是为了刷新cs隐藏部分的段基址和段限长
+    movl $0x17, %ecx
+    mov %cx, %fs
+    
+    # 和后面的 clts 配合来处理协处理器，由于和主题关系不大，此处不做论述
+    cmpl %eax, last_task_used_math
+    jne 1f
+    clts
+
+1:    
+    popl %eax
+    popl %ebx
+    popl %ecx
+    popl %ebp
+    ret
+
+.align 2
+first_return_from_kernel:
+    popl %edx
+    popl %edi
+    popl %esi
+    pop %gs
+    pop %fs
+    pop %es
+    pop %ds
+    iret

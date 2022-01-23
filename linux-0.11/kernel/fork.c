@@ -18,6 +18,7 @@
 #include <asm/system.h>
 
 extern void write_verify(unsigned long address);
+extern int first_return_from_kernel();
 
 long last_pid=0;
 
@@ -74,12 +75,46 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	struct task_struct *p;
 	int i;
 	struct file *f;
+    long *krnstack;
 
 	p = (struct task_struct *) get_free_page();
+
+    krnstack = (long *)((long)p + PAGE_SIZE);
+
+    /* 注释记得从下往上看，因为内核弹栈和我们压栈是反的 */
+
+    // 4. iret必然需要这些参数
+    *(--krnstack) = ss & 0xffff;
+    *(--krnstack) = esp;
+    *(--krnstack) = eflags;
+    *(--krnstack) = cs & 0xffff;
+    *(--krnstack) = eip;
+    
+    // 3. first_return_from_kernel会弹这些栈（恢复现场）
+    *(--krnstack) = ds;
+    *(--krnstack) = es;
+    *(--krnstack) = fs;
+    *(--krnstack) = gs;
+    *(--krnstack) = esi;
+    *(--krnstack) = edi;
+    *(--krnstack) = edx;
+
+    // 2. 之后会执行ret弹出一个EIP去执行，我们自己造一个函数first_return_from_kernel
+    *(--krnstack) = (long)first_return_from_kernel;
+
+    // 1. switch_to的最后要弹这四个栈
+    *(--krnstack) = ebp;
+    *(--krnstack) = ecx;
+    *(--krnstack) = ebx;
+    *(--krnstack) = 0;     // 这里的 0 的意思是eax，fork结束后子进程的返回值是0
+
 	if (!p)
 		return -EAGAIN;
 	task[nr] = p;
 	*p = *current;	/* NOTE! this doesn't copy the supervisor stack */
+
+    p->kernelstack = krnstack;          // 初始化PCB中的内核栈栈顶指针
+
 	p->state = TASK_UNINTERRUPTIBLE;
 	p->pid = last_pid;
 	p->father = current->pid;
@@ -91,32 +126,30 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	p->cutime = p->cstime = 0;
 	p->start_time = jiffies;
 
-    /*新建进程*/
-    fprintk(3, "%d\tN\t%d\n", p->pid, p->start_time);
+	// p->tss.back_link = 0;
+	// p->tss.esp0 = PAGE_SIZE + (long) p;
+	// p->tss.ss0 = 0x10;
+	// p->tss.eip = eip;
+	// p->tss.eflags = eflags;
+	// p->tss.eax = 0;
+	// p->tss.ecx = ecx;
+	// p->tss.edx = edx;
+	// p->tss.ebx = ebx;
+	// p->tss.esp = esp;
+	// p->tss.ebp = ebp;
+	// p->tss.esi = esi;
+	// p->tss.edi = edi;
+	// p->tss.es = es & 0xffff;
+	// p->tss.cs = cs & 0xffff;
+	// p->tss.ss = ss & 0xffff;
+	// p->tss.ds = ds & 0xffff;
+	// p->tss.fs = fs & 0xffff;
+	// p->tss.gs = gs & 0xffff;
+	// p->tss.ldt = _LDT(nr);
+	// p->tss.trace_bitmap = 0x80000000;
+	// if (last_task_used_math == current)
+	// 	__asm__("clts ; fnsave %0"::"m" (p->tss.i387));
 
-	p->tss.back_link = 0;
-	p->tss.esp0 = PAGE_SIZE + (long) p;
-	p->tss.ss0 = 0x10;
-	p->tss.eip = eip;
-	p->tss.eflags = eflags;
-	p->tss.eax = 0;
-	p->tss.ecx = ecx;
-	p->tss.edx = edx;
-	p->tss.ebx = ebx;
-	p->tss.esp = esp;
-	p->tss.ebp = ebp;
-	p->tss.esi = esi;
-	p->tss.edi = edi;
-	p->tss.es = es & 0xffff;
-	p->tss.cs = cs & 0xffff;
-	p->tss.ss = ss & 0xffff;
-	p->tss.ds = ds & 0xffff;
-	p->tss.fs = fs & 0xffff;
-	p->tss.gs = gs & 0xffff;
-	p->tss.ldt = _LDT(nr);
-	p->tss.trace_bitmap = 0x80000000;
-	if (last_task_used_math == current)
-		__asm__("clts ; fnsave %0"::"m" (p->tss.i387));
 	if (copy_mem(nr,p)) {
 		task[nr] = NULL;
 		free_page((long) p);
@@ -134,8 +167,6 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	set_tss_desc(gdt+(nr<<1)+FIRST_TSS_ENTRY,&(p->tss));
 	set_ldt_desc(gdt+(nr<<1)+FIRST_LDT_ENTRY,&(p->ldt));
 	p->state = TASK_RUNNING;	/* do this last, just in case */
-    /*新建 => 就绪*/
-	fprintk(3, "%d\tJ\t%d\n", p->pid, jiffies);
 	return last_pid;
 }
 
